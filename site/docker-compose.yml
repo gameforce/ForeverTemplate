@@ -1,11 +1,11 @@
 # Gameforce landing page. Static files only; update by copying new files into ./html (no rebuild).
+# Host networking keeps the visitor's real address for the rate limit and the access log; nginx listens on 8085.
 services:
   site:
     container_name: gameforce-site
     image: nginx:1.27-alpine
     restart: unless-stopped
-    ports:
-      - "8085:80"
+    network_mode: host
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./html:/usr/share/nginx/html:ro
