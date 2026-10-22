@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in Forever Template did not work.
+labels: [bug]
+body:
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: In game type /ft bug, press Ctrl+A then Ctrl+C, and paste the text here.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Game client
+      options: [WoW Forever, WoW Retail, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Paste any BugSack or Lua error text.
+    validations:
+      required: true

@@ -1,0 +1,10 @@
+## Interface: 16001, 16002, 120105
+## Title: Forever Template
+## Notes: Saves one character's UI setup and applies it to new characters on first login.
+## Author: Gameforce Gaming
+## Version: 0.1
+## OptionalDeps: LuxthosUI, EllesmereUI
+## SavedVariables: ForeverTemplateDB
+## SavedVariablesPerCharacter: ForeverTemplateCharDB
+
+ForeverTemplate.lua

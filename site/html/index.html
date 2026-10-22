@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forever Template | Gameforce Gaming</title>
+<meta name="description" content="Forever Template copies one World of Warcraft character's UI setup to all your other characters, for WoW Forever and Retail.">
+<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Forever Template | Gameforce Gaming">
+<meta property="og:description" content="Set up one character. Every new one starts ready.">
+<!-- TODO: og:image should be an absolute URL (https://<your-domain>/assets/og.jpg) once the domain is known. -->
+<meta property="og:image" content="assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Gameforce Gaming home">
+    <img src="assets/skull.png" alt="" width="44" height="44">
+    <span class="wordmark">GAMEFORCE <small>GAMING</small></span>
+  </a>
+  <nav aria-label="Primary">
+    <a href="#addon">Addon</a>
+    <a href="#how">How it works</a>
+    <a href="#follow">Follow</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero panel">
+    <img class="hero-banner" src="assets/banner.jpg" alt="Gameforce Gaming" width="1600" height="900">
+    <div class="hero-body">
+    <p class="eyebrow">A WoW addon for Forever and Retail</p>
+    <h1>FOREVER TEMPLATE</h1>
+    <p class="lead">Set up one character. Every new one starts ready.</p>
+    <div class="actions">
+      <!-- TODO: point this at the CurseForge / Wago page once the addon is published. -->
+      <span class="btn disabled" aria-disabled="true">Download: coming soon</span>
+      <!-- Keep identical to BUG_URL in ForeverTemplate.lua. -->
+      <a class="btn" href="https://github.com/gameforce/ForeverTemplate/issues" rel="noopener">Report a bug</a>
+    </div>
+    </div>
+  </section>
+
+  <section id="addon" class="grid">
+    <article class="panel">
+      <h2>It copies</h2>
+      <ul>
+        <li>Chat windows, tabs and channels</li>
+        <li>Which addons are on or off</li>
+        <li>Your Edit Mode layout choice</li>
+        <li>Objective tracker position</li>
+        <li>Nameplate and interface settings</li>
+        <li>Action bars, for the same class</li>
+      </ul>
+    </article>
+    <article class="panel">
+      <h2>It never copies</h2>
+      <ul>
+        <li>Quest, guide and leveling progress</li>
+        <li>Chat history</li>
+        <li>Anything another character needs to keep</li>
+        <li>Anything outside your own game folder. Nothing is sent online.</li>
+      </ul>
+    </article>
+    <article class="panel">
+      <h2>It works with</h2>
+      <ul>
+        <li>WoW Forever</li>
+        <li>WoW Retail</li>
+        <li>Any UI addons you already use. Choose which ones it leaves alone.</li>
+      </ul>
+    </article>
+  </section>
+
+  <section id="how" class="panel steps">
+    <h2>How it works</h2>
+    <ol>
+      <li><span class="num">1</span><div><h3>Save</h3><p>Log into the character you set up the way you like and type <code>/ft save</code>.</p></div></li>
+      <li><span class="num">2</span><div><h3>Log in</h3><p>Open any new character. Your template is applied about four seconds after login.</p></div></li>
+      <li><span class="num">3</span><div><h3>Apply</h3><p>It applies what it can, tells you what it did and what it skipped, and asks for a reload only if your addon list changed.</p></div></li>
+    </ol>
+  </section>
+
+  <section id="follow" class="panel follow">
+    <h2>Follow Gameforce</h2>
+    <div class="actions">
+      <a class="btn" href="https://www.twitch.tv/singameforce" rel="noopener">Twitch</a>
+      <a class="btn" href="https://www.youtube.com/@singameforce" rel="noopener">YouTube</a>
+      <a class="btn" href="https://x.com/SinGameforce" rel="noopener">X</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>&copy; Gameforce Gaming. Forever Template is a fan-made addon, not affiliated with or endorsed by Blizzard Entertainment.</p>
+</footer>
+</body>
+</html>

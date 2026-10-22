@@ -1,0 +1,17 @@
+# Gameforce landing page. Static files only; update by copying new files into ./html (no rebuild).
+services:
+  site:
+    container_name: gameforce-site
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./html:/usr/share/nginx/html:ro
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    mem_limit: 64m

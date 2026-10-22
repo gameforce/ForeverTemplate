@@ -1,0 +1,5 @@
+package-as: ForeverTemplate
+ignore:
+  - site
+  - .github
+  - CHANGELOG.md
