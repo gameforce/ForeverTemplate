@@ -1,7 +1,7 @@
 -- Forever Template: /ft save on the patient-zero character, then every new character applies it once on first login.
 -- Account-wide things (keybinds, macros, addon profiles, Edit Mode layouts) are already shared by the game, so this
--- covers what is left per character: CVars, the active Edit Mode layout, enabled addons, chat windows, the objective
--- tracker position and, for the same class, action bars.
+-- covers what is left per character: CVars, the active Edit Mode layout, enabled addons, chat windows and, for the
+-- same class, action bars.
 
 local ADDON = ...
 local DB, CDB
@@ -108,61 +108,6 @@ local function ApplyEditMode(name)
     end
     Print("Edit Mode layout '" .. name .. "' not found on this account. Create or import it, then type /ft apply.")
     return true
-end
-
--- Other addons can rewrite Edit Mode layouts behind our back (an installer importing its own layout puts the objective
--- tracker back where it likes), so a tracker position kept in the layout does not last. /ft save records where it is
--- on patient zero and this puts it there again.
-local function SaveTracker()
-    if not ObjectiveTrackerFrame then
-        return nil
-    end
-    local point, _, relPoint, x, y = ObjectiveTrackerFrame:GetPoint()
-    return point and { point = point, relPoint = relPoint, x = x, y = y } or nil
-end
-
-local trackerFixes = {}
-
--- Returns true if it moved the frame. Leaves the tracker alone while Edit Mode is open or in combat, when the player
--- turned this off, and when something else keeps moving it back (more than 5 moves a minute).
-local function FixTracker(quiet)
-    local tracker, want = ObjectiveTrackerFrame, DB.tracker
-    if not tracker or not want or DB.keepTracker == false or InCombatLockdown() or (EditModeManagerFrame and EditModeManagerFrame:IsShown()) then
-        return false
-    end
-    local point, _, relPoint, x, y = tracker:GetPoint()
-    if point == want.point and relPoint == want.relPoint and math.abs(x - want.x) < 1 and math.abs(y - want.y) < 1 then
-        return false
-    end
-    local now = GetTime()
-    while trackerFixes[1] and now - trackerFixes[1] > 60 do
-        table.remove(trackerFixes, 1)
-    end
-    if #trackerFixes >= 5 then
-        if not quiet then
-            Print("Another addon keeps moving the objective tracker; not fighting it. Turn this off with /ft tracker off.")
-        end
-        return false
-    end
-    trackerFixes[#trackerFixes + 1] = now
-    tracker:ClearAllPoints()
-    tracker:SetPoint(want.point, UIParent, want.relPoint, want.x, want.y)
-    if not quiet then
-        Print(("Objective tracker moved from %s %.0f,%.0f to %s %.0f,%.0f."):format(point or "?", x or 0, y or 0, want.point, want.x, want.y))
-    end
-    return true
-end
-
--- Layout changes come in bursts; only the last one in 2 seconds triggers a check.
-local trackerTimer = 0
-local function ScheduleTrackerFix(delay)
-    trackerTimer = trackerTimer + 1
-    local mine = trackerTimer
-    C_Timer.After(delay, function()
-        if mine == trackerTimer then
-            Try("tracker", FixTracker, true)
-        end
-    end)
 end
 
 ---------------------------------------------------------------- Addons
@@ -356,7 +301,7 @@ local function Diagnostics()
         "Class " .. PlayerClass(),
         t and ("Template from %s (%s) saved %s"):format(t.from, t.class, t.date) or "No template saved",
         "This character: " .. (CDB.applied and ("applied " .. CDB.applied) or "not applied"),
-        ("Auto-apply %s, tracker %s"):format(DB.auto and "on" or "off", DB.tracker and (DB.keepTracker == false and "saved, off" or "saved, kept") or "not saved"),
+        "Auto-apply " .. (DB.auto and "on" or "off"),
         "Ignored addons: " .. (#ignored > 0 and table.concat(ignored, ", ") or "none"),
         "Errors this session: " .. (#errors > 0 and "" or "none"),
     }
@@ -427,7 +372,6 @@ local function Save()
         cvars = Try("save cvars", SaveCVars), editMode = EditModeReady() and Try("save edit mode", ActiveLayoutName) or nil,
         addons = Try("save addons", SaveAddons), chat = Try("save chat", SaveChat),
     }
-    DB.tracker = Try("save tracker", SaveTracker)
     DB.bars = DB.bars or {}
     DB.bars[PlayerClass()] = Try("save bars", SaveBars) or DB.bars[PlayerClass()]
     CDB.applied = DB.template.date
@@ -450,15 +394,11 @@ local function Apply(tries)
     Try("edit mode", ApplyEditMode, t.editMode)
     Try("chat", ApplyChat, t.chat)
     local placed, waiting = Try("bars", ApplyBars)
-    local moved = Try("tracker", FixTracker, true)
     local reload = Try("addons", ApplyAddons, t.addons)
     CDB.applied = t.date
     Print("Applied template from " .. t.from .. ".")
     if placed and (placed > 0 or waiting > 0) then
         Print(("Action bars: %d placed%s."):format(placed, waiting > 0 and (", " .. waiting .. " waiting for spells or items") or ""))
-    end
-    if moved then
-        Print("Objective tracker moved to its saved spot.")
     end
     if #errors > failed then
         Print(#errors - failed .. " part(s) failed; type /ft errors for details.")
@@ -483,8 +423,7 @@ local function Status()
         classes[#classes + 1] = class
     end
     Print("Action bars saved for: " .. (#classes > 0 and table.concat(classes, ", ") or "none"))
-    Print("This character: " .. (CDB.applied and ("applied " .. CDB.applied) or "not applied") .. "; auto-apply " .. (DB.auto and "on" or "off")
-        .. "; tracker " .. (DB.tracker and (DB.keepTracker == false and "saved, off" or "saved, kept") or "not saved"))
+    Print("This character: " .. (CDB.applied and ("applied " .. CDB.applied) or "not applied") .. "; auto-apply " .. (DB.auto and "on" or "off"))
 end
 
 SLASH_FOREVERTEMPLATE1, SLASH_FOREVERTEMPLATE2 = "/ft", "/forevertemplate"
@@ -523,19 +462,12 @@ SlashCmdList.FOREVERTEMPLATE = function(msg)
             DB.ignore[name] = not DB.ignore[name] or nil
             Print(name .. (DB.ignore[name] and " is now ignored." or " is no longer ignored.") .. " Takes effect at the next /ft save and /ft apply.")
         end
-    elseif cmd == "tracker" and (arg == "on" or arg == "off") then
-        DB.keepTracker = arg == "on"
-        Print("Keep the objective tracker at its saved spot: " .. arg)
-    elseif cmd == "tracker" then
-        if not FixTracker() then
-            Print("Objective tracker is already at the saved spot, none is saved (/ft save), or Edit Mode/combat is active.")
-        end
     elseif cmd == "reset" then
         CDB.applied, CDB.placed = nil, nil
         Print("Cleared this character's applied flag; /ft apply or relog applies again.")
     elseif cmd == "status" or cmd == "" then
         Status()
-        Print("Commands: /ft save | apply | bars | tracker [on/off] | ignore [addon] | errors | bug | auto on/off | reset | status")
+        Print("Commands: /ft save | apply | bars | ignore [addon] | errors | bug | auto on/off | reset | status")
     end
 end
 
@@ -543,7 +475,6 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("SPELLS_CHANGED")
-frame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 frame:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and name == ADDON then
         local fresh = ForeverTemplateDB == nil
@@ -556,13 +487,11 @@ frame:SetScript("OnEvent", function(_, event, name)
             DB.version = DB_VERSION
         end
         DB.ignore = DB.ignore or {}
+        DB.tracker, DB.keepTracker = nil, nil -- the tracker fix was removed; drop what it saved
     elseif event == "PLAYER_LOGIN" then
-        C_Timer.After(8, function() Try("tracker", FixTracker, true) end)
         if DB.template and not CDB.applied and DB.auto then
             C_Timer.After(4, Apply)
         end
-    elseif event == "EDIT_MODE_LAYOUTS_UPDATED" and DB then
-        ScheduleTrackerFix(2)
     elseif event == "SPELLS_CHANGED" and CDB and CDB.applied then
         C_Timer.After(1, function() Try("bars", ApplyBars) end)
     end

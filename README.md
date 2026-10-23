@@ -8,13 +8,13 @@ Bug reports and ideas: [Issues](https://github.com/gameforce/ForeverTemplate/iss
 `/ft save` on the character you set up records, for the account:
 - CVars (nameplates, interface options), chat windows and channels
 - which addons are enabled
-- the Edit Mode layout you use, and the objective tracker position
+- the Edit Mode layout you use
 - action bars, per class (only the same class gets them)
 
 A character that has not applied the template does so about four seconds after login. It never copies per-character addon progress (quests, guides, chat history), and nothing is sent anywhere.
 
 ## Commands
-`/ft` shows status. `/ft save`, `/ft apply`, `/ft bars`, `/ft tracker [on|off]`, `/ft ignore [AddonFolder]` (addons it never switches on or off), `/ft errors`, `/ft bug`, `/ft auto on|off`, `/ft reset`.
+`/ft` shows status. `/ft save`, `/ft apply`, `/ft bars`, `/ft ignore [AddonFolder]` (addons it never switches on or off), `/ft errors`, `/ft bug`, `/ft auto on|off`, `/ft reset`.
 
 ## Install (for now)
 Copy this folder to `World of Warcraft/<client>/Interface/AddOns/ForeverTemplate`. A CurseForge release will follow.
