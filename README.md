@@ -14,7 +14,10 @@ Bug reports and ideas: [Issues](https://github.com/gameforce/ForeverTemplate/iss
 A character that has not applied the template does so about four seconds after login. It never copies per-character addon progress (quests, guides, chat history), and nothing is sent anywhere.
 
 ## Commands
-`/ft` shows status. `/ft save`, `/ft apply`, `/ft bars`, `/ft ignore [AddonFolder]` (addons it never switches on or off), `/ft errors`, `/ft bug`, `/ft auto on|off`, `/ft reset`.
+`/ft` shows status. `/ft save`, `/ft apply`, `/ft keep` and `/ft restore` (see below), `/ft bars`, `/ft ignore [AddonFolder]` (addons it never switches on or off), `/ft errors`, `/ft bug`, `/ft auto on|off`, `/ft reset`.
+
+## Keeping your EllesmereUI changes when Luxthos UI updates
+An update imports Luxthos UI's EllesmereUI profile over yours, so element positions and options you changed are lost. Before you update, type `/ft keep`: it compares your active EllesmereUI profile with the one in the Luxthos UI pack and stores every setting you changed or added. After the update, type `/ft restore` and click Reload: your settings go back on top of the new profile, and anything Luxthos changed that you did not touch keeps his new value. A login message reminds you when the pack changed since your last `/ft keep`. Run `/ft keep` again after each round of tweaks. Skipped on purpose: the Cooldown Manager spell lists and EllesmereUI bookkeeping keys, which EllesmereUI writes by itself.
 
 ## Install (for now)
 Copy this folder to `World of Warcraft/<client>/Interface/AddOns/ForeverTemplate`. A CurseForge release will follow.

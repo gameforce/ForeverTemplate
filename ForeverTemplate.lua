@@ -426,6 +426,187 @@ local function Status()
     Print("This character: " .. (CDB.applied and ("applied " .. CDB.applied) or "not applied") .. "; auto-apply " .. (DB.auto and "on" or "off"))
 end
 
+---------------------------------------------------------------- Keep my EllesmereUI changes across Luxthos UI updates
+-- /ft keep stores every EllesmereUI setting that differs from Luxthos's own profile (the one in his pack).
+-- /ft restore writes those settings back after an update replaced the profile. Settings Luxthos did not
+-- change stay at his new values; only the ones you changed come back.
+local KEEP_SKIP = { cdmSpells = true, unlockLayoutMeta = true }
+local function KeepSkipped(key)
+    return type(key) == "string" and (KEEP_SKIP[key] or key:sub(1, 1) == "_")
+end
+
+local function SameValue(a, b)
+    if type(a) == "number" and type(b) == "number" then
+        return math.abs(a - b) < 1e-6
+    end
+    return a == b
+end
+
+-- Every setting in `mine` that is missing from `base` or differs from it, as { path = {keys...}, value = v }.
+local function Diff(mine, base, path, out)
+    for k, v in pairs(mine) do
+        if not KeepSkipped(k) then
+            path[#path + 1] = k
+            local b
+            if type(base) == "table" then
+                b = base[k]
+            end
+            if type(v) == "table" then
+                Diff(v, b, path, out)
+            elseif not SameValue(v, b) then
+                local copy = {}
+                for i = 1, #path do
+                    copy[i] = path[i]
+                end
+                out[#out + 1] = { path = copy, value = v }
+            end
+            path[#path] = nil
+        end
+    end
+    return out
+end
+
+-- How many of base's settings also exist in mine, out of all of base's: a sanity check that both have the same shape.
+local function SharedLeaves(base, mine)
+    local shared, total = 0, 0
+    for k, v in pairs(base) do
+        if not KeepSkipped(k) then
+            if type(v) == "table" then
+                local s, t = SharedLeaves(v, type(mine) == "table" and mine[k] or nil)
+                shared, total = shared + s, total + t
+            else
+                total = total + 1
+                if type(mine) == "table" and mine[k] ~= nil then
+                    shared = shared + 1
+                end
+            end
+        end
+    end
+    return shared, total
+end
+
+-- Writes each stored setting into `profile`, creating tables on the way. Returns how many were written.
+local function Patch(profile, patch)
+    local written = 0
+    for _, e in ipairs(patch) do
+        local t = profile
+        for i = 1, #e.path - 1 do
+            local key = e.path[i]
+            if t[key] == nil then
+                t[key] = {}
+            end
+            t = t[key]
+            if type(t) ~= "table" then
+                t = nil
+                break
+            end
+        end
+        if t then
+            t[e.path[#e.path]] = e.value
+            written = written + 1
+        end
+    end
+    return written
+end
+
+-- Luxthos's EllesmereUI profile as his pack ships it, decoded by EllesmereUI itself, and the pack's id.
+local function LuxProfile()
+    local eui, pack = EllesmereUI, LuxthosUI_Pack
+    if type(eui) ~= "table" or type(eui.DecodeProfileString) ~= "function" then
+        return nil, "EllesmereUI is not loaded."
+    end
+    if type(pack) ~= "table" or type(pack.profiles) ~= "table" then
+        return nil, "Luxthos UI's data is not loaded."
+    end
+    for _, p in ipairs(pack.profiles) do
+        if type(p.import) == "string" and p.import:find("^!EUI_") then
+            local data = eui.DecodeProfileString(p.import)
+            if type(data) == "table" then
+                return data, pack.id
+            end
+        end
+    end
+    return nil, "No EllesmereUI profile found in Luxthos UI's data."
+end
+
+local function ActiveEUIProfile()
+    local name = EllesmereUI and EllesmereUI.GetActiveProfileName and EllesmereUI.GetActiveProfileName()
+    local profile = name and EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[name]
+    if type(profile) == "table" then
+        return name, profile
+    end
+end
+
+local function Keep()
+    local base, id = LuxProfile()
+    if not base then
+        return Print(id)
+    end
+    local name, mine = ActiveEUIProfile()
+    if not name then
+        return Print("Could not read the active EllesmereUI profile.")
+    end
+    local shared, total = SharedLeaves(base, mine)
+    if total == 0 or shared / total < 0.5 then
+        return Print(("Profile '%s' does not look like Luxthos's (%d of %d settings line up), so nothing was stored."):format(name, shared, total))
+    end
+    local patch = Diff(mine, base, {}, {})
+    DB.keep = { profile = name, luxId = id, date = date("%Y-%m-%d %H:%M"), patch = patch }
+    local per = {}
+    for _, e in ipairs(patch) do
+        local group = tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
+        per[group] = (per[group] or 0) + 1
+    end
+    local list = {}
+    for group, n in pairs(per) do
+        list[#list + 1] = { group, n }
+    end
+    table.sort(list, function(a, b) return a[2] > b[2] end)
+    local parts = {}
+    for i = 1, math.min(8, #list) do
+        parts[i] = list[i][1] .. " " .. list[i][2]
+    end
+    Print(("Kept %d settings of profile '%s' that differ from Luxthos UI%s."):format(#patch, name, #patch > 0 and (": " .. table.concat(parts, ", ")) or ""))
+    Print("After updating Luxthos UI, type /ft restore.")
+end
+
+local function Restore()
+    local k = DB.keep
+    if not k then
+        return Print("Nothing stored. Type /ft keep before you update Luxthos UI.")
+    end
+    if InCombatLockdown() then
+        return Print("In combat; type /ft restore when it ends.")
+    end
+    local profile = EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[k.profile]
+    if type(profile) ~= "table" then
+        return Print("EllesmereUI profile '" .. k.profile .. "' no longer exists; nothing restored.")
+    end
+    local written = Patch(profile, k.patch)
+    k.restoredFor = LuxthosUI_Pack and LuxthosUI_Pack.id or k.luxId
+    Print(("Restored %d of %d kept settings into '%s' (stored %s)."):format(written, #k.patch, k.profile, k.date))
+    StaticPopup_Show("FOREVERTEMPLATE_KEEP_RELOAD")
+end
+
+StaticPopupDialogs["FOREVERTEMPLATE_KEEP_RELOAD"] = {
+    text = "Forever Template restored your EllesmereUI changes. Reload the UI to finish?",
+    button1 = RELOADUI,
+    button2 = CANCEL,
+    OnAccept = function() ReloadUI() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+-- A new Luxthos pack since the last /ft keep: remind once per pack.
+local function CheckKeepReminder()
+    local k = DB.keep
+    local id = LuxthosUI_Pack and LuxthosUI_Pack.id
+    if k and id and k.luxId ~= id and k.restoredFor ~= id then
+        Print("Luxthos UI changed since your settings were kept. Type /ft restore to put your EllesmereUI changes back.")
+    end
+end
+
 SLASH_FOREVERTEMPLATE1, SLASH_FOREVERTEMPLATE2 = "/ft", "/forevertemplate"
 SlashCmdList.FOREVERTEMPLATE = function(msg)
     local cmd, arg = msg:lower():match("^(%S*)%s*(%S*)")
@@ -433,6 +614,10 @@ SlashCmdList.FOREVERTEMPLATE = function(msg)
         Save()
     elseif cmd == "apply" then
         Apply()
+    elseif cmd == "keep" then
+        Keep()
+    elseif cmd == "restore" then
+        Restore()
     elseif cmd == "bars" then
         DB.bars = DB.bars or {}
         DB.bars[PlayerClass()] = Try("save bars", SaveBars) or DB.bars[PlayerClass()]
@@ -467,7 +652,7 @@ SlashCmdList.FOREVERTEMPLATE = function(msg)
         Print("Cleared this character's applied flag; /ft apply or relog applies again.")
     elseif cmd == "status" or cmd == "" then
         Status()
-        Print("Commands: /ft save | apply | bars | ignore [addon] | errors | bug | auto on/off | reset | status")
+        Print("Commands: /ft save | apply | keep | restore | bars | ignore [addon] | errors | bug | auto on/off | reset | status")
     end
 end
 
@@ -489,6 +674,7 @@ frame:SetScript("OnEvent", function(_, event, name)
         DB.ignore = DB.ignore or {}
         DB.tracker, DB.keepTracker = nil, nil -- the tracker fix was removed; drop what it saved
     elseif event == "PLAYER_LOGIN" then
+        C_Timer.After(6, CheckKeepReminder)
         if DB.template and not CDB.applied and DB.auto then
             C_Timer.After(4, Apply)
         end
