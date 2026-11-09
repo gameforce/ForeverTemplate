@@ -430,7 +430,16 @@ end
 -- /ft keep stores every EllesmereUI setting that differs from Luxthos's own profile (the one in his pack).
 -- /ft restore writes those settings back after an update replaced the profile. Settings Luxthos did not
 -- change stay at his new values; only the ones you changed come back.
-local KEEP_SKIP = { cdmSpells = true, unlockLayoutMeta = true }
+-- tooltipFixedPos: Luxthos moved the tooltip to Blizzard's Edit Mode, so an old EllesmereUI position must not return.
+-- bagVisualOrder: item ids sorted into bag categories (inventory state, not a setting).
+-- EllesmereUIQuickdraw: the module is off and its listed values are all defaults that EllesmereUI fills in.
+-- nextBarId (a counter) and savedZoom (the minimap's last zoom) are state EllesmereUI writes itself.
+-- EUI_TooltipAnchor is the same tooltip position as tooltipFixedPos, kept in the layout.
+local KEEP_SKIP = {
+    cdmSpells = true, unlockLayoutMeta = true, tooltipFixedPos = true,
+    bagVisualOrder = true, EllesmereUIQuickdraw = true,
+    nextBarId = true, savedZoom = true, EUI_TooltipAnchor = true,
+}
 local function KeepSkipped(key)
     return type(key) == "string" and (KEEP_SKIP[key] or key:sub(1, 1) == "_")
 end
@@ -570,6 +579,39 @@ local function Keep()
     Print("After updating Luxthos UI, type /ft restore.")
 end
 
+-- Prints the stored settings, one per line ("Module.path = value"); `filter` keeps lines containing that text.
+local function KeepList(filter)
+    local k = DB.keep
+    if not k then
+        return Print("Nothing stored. Type /ft keep first.")
+    end
+    filter = filter and filter ~= "" and filter:lower() or nil
+    local lines = {}
+    for _, e in ipairs(k.patch) do
+        local parts = {}
+        for i, key in ipairs(e.path) do
+            if not (i == 1 and key == "addons") then
+                parts[#parts + 1] = tostring(key)
+            end
+        end
+        local value = tostring(e.value)
+        if #value > 40 then
+            value = value:sub(1, 40) .. "..."
+        end
+        local line = table.concat(parts, ".") .. " = " .. value
+        if not filter or line:lower():find(filter, 1, true) then
+            lines[#lines + 1] = line
+        end
+    end
+    table.sort(lines)
+    local MAX = 40
+    for i = 1, math.min(MAX, #lines) do
+        print("|cff999999" .. lines[i] .. "|r")
+    end
+    Print(("%d of %d kept settings shown%s."):format(math.min(MAX, #lines), #lines,
+        #lines > MAX and "; narrow it with /ft keep list <text>, for example /ft keep list quickdraw" or ""))
+end
+
 local function Restore()
     local k = DB.keep
     if not k then
@@ -615,7 +657,11 @@ SlashCmdList.FOREVERTEMPLATE = function(msg)
     elseif cmd == "apply" then
         Apply()
     elseif cmd == "keep" then
-        Keep()
+        if arg == "list" then
+            KeepList(msg:match("^%S+%s+%S+%s+(.-)%s*$"))
+        else
+            Keep()
+        end
     elseif cmd == "restore" then
         Restore()
     elseif cmd == "bars" then
