@@ -452,16 +452,24 @@ local function SameValue(a, b)
 end
 
 -- Every setting in `mine` that is missing from `base` or differs from it, as { path = {keys...}, value = v }.
-local function Diff(mine, base, path, out)
+-- `def` holds EllesmereUI's own defaults for the same place: a profile string leaves out settings that are at
+-- their default, so a setting missing from `base` is compared with the default instead.
+local function Diff(mine, base, path, out, def)
     for k, v in pairs(mine) do
         if not KeepSkipped(k) then
             path[#path + 1] = k
-            local b
+            local b, d
             if type(base) == "table" then
                 b = base[k]
             end
+            if type(def) == "table" then
+                d = def[k]
+            end
+            if b == nil and type(d) ~= "table" then
+                b = d
+            end
             if type(v) == "table" then
-                Diff(v, b, path, out)
+                Diff(v, b, path, out, d)
             elseif not SameValue(v, b) then
                 local copy = {}
                 for i = 1, #path do
@@ -538,6 +546,69 @@ local function LuxProfile()
     return nil, "No EllesmereUI profile found in Luxthos UI's data."
 end
 
+-- EllesmereUI's default settings per module, shaped like a profile ({ addons = { [folder] = defaults } }).
+-- Every module registers its defaults with EllesmereUI.Lite; a module can register more than once.
+local function EUIDefaults()
+    local addons = {}
+    local lite = EllesmereUI and EllesmereUI.Lite
+    local registry = type(lite) == "table" and lite._dbRegistry
+    if type(registry) ~= "table" then
+        return nil
+    end
+    local function Fill(dest, src)
+        for k, v in pairs(src) do
+            if type(v) == "table" then
+                if type(dest[k]) ~= "table" then
+                    dest[k] = {}
+                end
+                Fill(dest[k], v)
+            elseif dest[k] == nil then
+                dest[k] = v
+            end
+        end
+    end
+    for _, db in ipairs(registry) do
+        if type(db) == "table" and type(db.folder) == "string" and type(db._profileDefaults) == "table" then
+            addons[db.folder] = addons[db.folder] or {}
+            Fill(addons[db.folder], db._profileDefaults)
+        end
+    end
+    return { addons = addons }
+end
+
+-- EllesmereUI's modules are separate addons. A module that is installed but not loaded is switched off, and
+-- its settings are leftovers, so they are not stored. A folder that is not an addon at all is not a module.
+local function ModuleOff(folder)
+    if type(folder) ~= "string" then
+        return false
+    end
+    local ok, loaded = pcall(AddOns.IsAddOnLoaded, folder)
+    if not ok or loaded then
+        return false
+    end
+    local ok2, name, _, _, _, reason = pcall(AddOns.GetAddOnInfo, folder)
+    return ok2 and name ~= nil and reason ~= "MISSING"
+end
+
+-- Removes the settings of switched-off modules from `patch`; returns the names of those modules.
+local function DropOffModules(patch)
+    local off, names, kept = {}, {}, {}
+    for _, e in ipairs(patch) do
+        local folder = e.path[1] == "addons" and e.path[2] or nil
+        if folder and off[folder] == nil then
+            off[folder] = ModuleOff(folder)
+            if off[folder] then
+                names[#names + 1] = (folder:gsub("^EllesmereUI", ""))
+            end
+        end
+        if not (folder and off[folder]) then
+            kept[#kept + 1] = e
+        end
+    end
+    table.sort(names)
+    return kept, names
+end
+
 -- Bar Glows (Cooldown Manager > Bar Glows) are not in the profile: EllesmereUI keeps them per spec in
 -- EllesmereUIDB.spellAssignments.profiles[name].specProfiles[spec].barGlows, and a profile string carries
 -- them as cdmSpells[spec].barGlows. selectedBar is only the bar last picked in the options.
@@ -577,10 +648,18 @@ local function ActiveEUIProfile()
     end
 end
 
-local function Keep()
+local function Keep(force)
     local base, id = LuxProfile()
     if not base then
         return Print(id)
+    end
+    -- Luxthos's pack is newer than the last keep and that keep was not restored for it. Storing now would
+    -- replace it, and would count leftovers from his old pack as your changes if his update is not applied yet.
+    local last = DB.keep
+    if last and id and last.luxId ~= id and last.restoredFor ~= id and not force then
+        Print(("Luxthos UI changed since your settings were kept (%s), so nothing was stored."):format(tostring(last.date)))
+        Print("Apply his update with /lux, then type /ft restore, then /ft keep. To replace the stored settings with your current ones anyway, type /ft keep force.")
+        return
     end
     local name, mine = ActiveEUIProfile()
     if not name then
@@ -590,7 +669,7 @@ local function Keep()
     if total == 0 or shared / total < 0.5 then
         return Print(("Profile '%s' does not look like Luxthos's (%d of %d settings line up), so nothing was stored."):format(name, shared, total))
     end
-    local patch = Diff(mine, base, {}, {})
+    local patch, offModules = DropOffModules(Diff(mine, base, {}, {}, EUIDefaults()))
     local specs = SpecProfiles(name)
     if specs then
         DiffBarGlows(specs, base.cdmSpells, patch)
@@ -611,6 +690,9 @@ local function Keep()
         parts[i] = list[i][1] .. " " .. list[i][2]
     end
     Print(("Kept %d settings of profile '%s' that differ from Luxthos UI%s."):format(#patch, name, #patch > 0 and (": " .. table.concat(parts, ", ")) or ""))
+    if #offModules > 0 then
+        Print("Not stored, because the module is switched off: " .. table.concat(offModules, ", ") .. ".")
+    end
     Print("After updating Luxthos UI, type /ft restore.")
 end
 
@@ -712,7 +794,7 @@ SlashCmdList.FOREVERTEMPLATE = function(msg)
         if arg == "list" then
             KeepList(msg:match("^%S+%s+%S+%s+(.-)%s*$"))
         else
-            Keep()
+            Keep(arg == "force")
         end
     elseif cmd == "restore" then
         Restore()
