@@ -621,18 +621,30 @@ local function SpecProfiles(name)
     end
 end
 
--- Every Bar Glow setting in `specs` that differs from Luxthos's (`baseSpecs`, his cdmSpells), marked root = "glows".
--- Spec keys can be numbers or strings on either side.
-local function DiffBarGlows(specs, baseSpecs, out)
+-- Tracking Bars (Cooldown Manager > Tracking Bars) live in the same per-spec store: the bars in trackedBuffBars,
+-- their positions in tbbPositions and their anchor links in tbbUnlockLinks.
+-- section -> the root mark its settings get ("glows" = Bar Glows, "tbars" = Tracking Bars).
+local SPEC_SECTIONS = {
+    barGlows = "glows", trackedBuffBars = "tbars", tbbPositions = "tbars", tbbUnlockLinks = "tbars",
+}
+local ROOT_LABEL = { glows = "BarGlows", tbars = "TrackingBars" }
+
+-- Every Bar Glow and Tracking Bar setting in `specs` that differs from Luxthos's (`baseSpecs`, his cdmSpells),
+-- with path { spec, section, ... } and a root mark. Spec keys can be numbers or strings on either side.
+local function DiffSpecStore(specs, baseSpecs, out)
     for spec, prof in pairs(specs) do
-        local glows = type(prof) == "table" and prof.barGlows
-        if type(glows) == "table" then
+        if type(prof) == "table" then
             local b = type(baseSpecs) == "table" and (baseSpecs[spec] or baseSpecs[tostring(spec)] or baseSpecs[tonumber(spec) or false])
-            local found = Diff(glows, type(b) == "table" and b.barGlows or nil, { spec, "barGlows" }, {})
-            for _, e in ipairs(found) do
-                if e.path[3] ~= "selectedBar" then
-                    e.root = "glows"
-                    out[#out + 1] = e
+            for section, root in pairs(SPEC_SECTIONS) do
+                local mine = prof[section]
+                if type(mine) == "table" then
+                    local found = Diff(mine, type(b) == "table" and b[section] or nil, { spec, section }, {})
+                    for _, e in ipairs(found) do
+                        if e.path[3] ~= "selectedBar" then
+                            e.root = root
+                            out[#out + 1] = e
+                        end
+                    end
                 end
             end
         end
@@ -672,12 +684,12 @@ local function Keep(force)
     local patch, offModules = DropOffModules(Diff(mine, base, {}, {}, EUIDefaults()))
     local specs = SpecProfiles(name)
     if specs then
-        DiffBarGlows(specs, base.cdmSpells, patch)
+        DiffSpecStore(specs, base.cdmSpells, patch)
     end
     DB.keep = { profile = name, luxId = id, date = date("%Y-%m-%d %H:%M"), patch = patch }
     local per = {}
     for _, e in ipairs(patch) do
-        local group = e.root == "glows" and "BarGlows" or tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
+        local group = e.root and (ROOT_LABEL[e.root] or e.root) or tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
         per[group] = (per[group] or 0) + 1
     end
     local list = {}
@@ -706,10 +718,11 @@ local function KeepList(filter)
     local lines = {}
     for _, e in ipairs(k.patch) do
         local parts = {}
-        if e.root == "glows" then
-            parts[1] = "BarGlows"
+        if e.root then
+            parts[1] = ROOT_LABEL[e.root] or e.root
         end
         for i, key in ipairs(e.path) do
+            -- Bar Glows drop their section name ("barGlows"); Tracking Bars keep theirs, since they have three.
             if not (i == 1 and key == "addons") and not (e.root == "glows" and i == 2) then
                 parts[#parts + 1] = tostring(key)
             end
@@ -744,10 +757,10 @@ local function Restore()
     if type(profile) ~= "table" then
         return Print("EllesmereUI profile '" .. k.profile .. "' no longer exists; nothing restored.")
     end
-    -- Profile settings go into the profile; Bar Glows go into the profile's per-spec store.
+    -- Profile settings go into the profile; Bar Glows and Tracking Bars go into the profile's per-spec store.
     local settings, glows = {}, {}
     for _, e in ipairs(k.patch) do
-        local list = e.root == "glows" and glows or settings
+        local list = e.root and glows or settings
         list[#list + 1] = e
     end
     local written = Patch(profile, settings)
@@ -756,7 +769,7 @@ local function Restore()
         if specs then
             written = written + Patch(specs, glows)
         else
-            Print(("%d kept Bar Glow settings were not restored: profile '%s' has no Cooldown Manager spell store."):format(#glows, k.profile))
+            Print(("%d kept Bar Glow and Tracking Bar settings were not restored: profile '%s' has no Cooldown Manager spell store."):format(#glows, k.profile))
         end
     end
     k.restoredFor = LuxthosUI_Pack and LuxthosUI_Pack.id or k.luxId
