@@ -538,6 +538,37 @@ local function LuxProfile()
     return nil, "No EllesmereUI profile found in Luxthos UI's data."
 end
 
+-- Bar Glows (Cooldown Manager > Bar Glows) are not in the profile: EllesmereUI keeps them per spec in
+-- EllesmereUIDB.spellAssignments.profiles[name].specProfiles[spec].barGlows, and a profile string carries
+-- them as cdmSpells[spec].barGlows. selectedBar is only the bar last picked in the options.
+local function SpecProfiles(name)
+    local sa = EllesmereUIDB and EllesmereUIDB.spellAssignments
+    local bucket = sa and type(sa.profiles) == "table" and sa.profiles[name]
+    local specs = type(bucket) == "table" and bucket.specProfiles
+    if type(specs) == "table" then
+        return specs
+    end
+end
+
+-- Every Bar Glow setting in `specs` that differs from Luxthos's (`baseSpecs`, his cdmSpells), marked root = "glows".
+-- Spec keys can be numbers or strings on either side.
+local function DiffBarGlows(specs, baseSpecs, out)
+    for spec, prof in pairs(specs) do
+        local glows = type(prof) == "table" and prof.barGlows
+        if type(glows) == "table" then
+            local b = type(baseSpecs) == "table" and (baseSpecs[spec] or baseSpecs[tostring(spec)] or baseSpecs[tonumber(spec) or false])
+            local found = Diff(glows, type(b) == "table" and b.barGlows or nil, { spec, "barGlows" }, {})
+            for _, e in ipairs(found) do
+                if e.path[3] ~= "selectedBar" then
+                    e.root = "glows"
+                    out[#out + 1] = e
+                end
+            end
+        end
+    end
+    return out
+end
+
 local function ActiveEUIProfile()
     local name = EllesmereUI and EllesmereUI.GetActiveProfileName and EllesmereUI.GetActiveProfileName()
     local profile = name and EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[name]
@@ -560,10 +591,14 @@ local function Keep()
         return Print(("Profile '%s' does not look like Luxthos's (%d of %d settings line up), so nothing was stored."):format(name, shared, total))
     end
     local patch = Diff(mine, base, {}, {})
+    local specs = SpecProfiles(name)
+    if specs then
+        DiffBarGlows(specs, base.cdmSpells, patch)
+    end
     DB.keep = { profile = name, luxId = id, date = date("%Y-%m-%d %H:%M"), patch = patch }
     local per = {}
     for _, e in ipairs(patch) do
-        local group = tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
+        local group = e.root == "glows" and "BarGlows" or tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
         per[group] = (per[group] or 0) + 1
     end
     local list = {}
@@ -589,8 +624,11 @@ local function KeepList(filter)
     local lines = {}
     for _, e in ipairs(k.patch) do
         local parts = {}
+        if e.root == "glows" then
+            parts[1] = "BarGlows"
+        end
         for i, key in ipairs(e.path) do
-            if not (i == 1 and key == "addons") then
+            if not (i == 1 and key == "addons") and not (e.root == "glows" and i == 2) then
                 parts[#parts + 1] = tostring(key)
             end
         end
@@ -624,7 +662,21 @@ local function Restore()
     if type(profile) ~= "table" then
         return Print("EllesmereUI profile '" .. k.profile .. "' no longer exists; nothing restored.")
     end
-    local written = Patch(profile, k.patch)
+    -- Profile settings go into the profile; Bar Glows go into the profile's per-spec store.
+    local settings, glows = {}, {}
+    for _, e in ipairs(k.patch) do
+        local list = e.root == "glows" and glows or settings
+        list[#list + 1] = e
+    end
+    local written = Patch(profile, settings)
+    if #glows > 0 then
+        local specs = SpecProfiles(k.profile)
+        if specs then
+            written = written + Patch(specs, glows)
+        else
+            Print(("%d kept Bar Glow settings were not restored: profile '%s' has no Cooldown Manager spell store."):format(#glows, k.profile))
+        end
+    end
     k.restoredFor = LuxthosUI_Pack and LuxthosUI_Pack.id or k.luxId
     Print(("Restored %d of %d kept settings into '%s' (stored %s)."):format(written, #k.patch, k.profile, k.date))
     StaticPopup_Show("FOREVERTEMPLATE_KEEP_RELOAD")
