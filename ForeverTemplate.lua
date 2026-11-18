@@ -110,6 +110,67 @@ local function ApplyEditMode(name)
     return true
 end
 
+-- The tooltip's place in an Edit Mode layout (Luxthos UI's updates reset it to his default).
+local TOOLTIP_SYSTEM = Enum.EditModeSystem and Enum.EditModeSystem.HudTooltip
+local ANCHOR_KEYS = { "point", "relativeTo", "relativePoint", "offsetX", "offsetY" }
+
+local function TooltipSystem(layout)
+    for _, s in ipairs(layout and layout.systems or {}) do
+        if s.system == TOOLTIP_SYSTEM then
+            return s
+        end
+    end
+end
+
+-- { layout = name, anchor = {...} } for the active custom layout, or nil.
+local function KeepTooltip()
+    if not TOOLTIP_SYSTEM or not EditModeReady() then
+        return nil
+    end
+    local info = C_EditMode.GetLayouts()
+    local layout = info.layouts[info.activeLayout - #EditModePresetLayoutManager:GetCopyOfPresetLayouts()]
+    local s = TooltipSystem(layout)
+    if not s or not s.anchorInfo then
+        return nil
+    end
+    local anchor = {}
+    for _, key in ipairs(ANCHOR_KEYS) do
+        anchor[key] = s.anchorInfo[key]
+    end
+    return { layout = layout.layoutName, anchor = anchor }
+end
+
+-- Writes a kept tooltip place back into its layout. Returns a message.
+local function RestoreTooltip(kept)
+    if not kept or not TOOLTIP_SYSTEM or not EditModeReady() then
+        return nil
+    end
+    if EditModeManagerFrame:IsShown() then
+        return "Tooltip position not restored: close Edit Mode and type /ft restore again."
+    end
+    local info = C_EditMode.GetLayouts()
+    for _, layout in ipairs(info.layouts) do
+        if layout.layoutName == kept.layout then
+            local s = TooltipSystem(layout)
+            if not s or not s.anchorInfo then
+                return "Tooltip position not restored: layout '" .. kept.layout .. "' has no tooltip."
+            end
+            local changed = false
+            for _, key in ipairs(ANCHOR_KEYS) do
+                if s.anchorInfo[key] ~= kept.anchor[key] then
+                    s.anchorInfo[key], changed = kept.anchor[key], true
+                end
+            end
+            if not changed then
+                return "Tooltip position was already yours."
+            end
+            C_EditMode.SaveLayouts(info)
+            return "Tooltip position restored in Edit Mode layout '" .. kept.layout .. "'."
+        end
+    end
+    return "Tooltip position not restored: Edit Mode layout '" .. kept.layout .. "' not found."
+end
+
 ---------------------------------------------------------------- Addons
 local function AddonEnabled(name)
     local ok, state = pcall(AddOns.GetAddOnEnableState, name, UnitGUID("player"))
@@ -431,6 +492,7 @@ end
 -- /ft restore writes those settings back after an update replaced the profile. Settings Luxthos did not
 -- change stay at his new values; only the ones you changed come back.
 -- tooltipFixedPos: Luxthos moved the tooltip to Blizzard's Edit Mode, so an old EllesmereUI position must not return.
+-- (The Edit Mode tooltip position is kept separately, see KeepTooltip.)
 -- bagVisualOrder: item ids sorted into bag categories (inventory state, not a setting).
 -- EllesmereUIQuickdraw: the module is off and its listed values are all defaults that EllesmereUI fills in.
 -- nextBarId (a counter) and savedZoom (the minimap's last zoom) are state EllesmereUI writes itself.
@@ -686,7 +748,7 @@ local function Keep(force)
     if specs then
         DiffSpecStore(specs, base.cdmSpells, patch)
     end
-    DB.keep = { profile = name, luxId = id, date = date("%Y-%m-%d %H:%M"), patch = patch }
+    DB.keep = { profile = name, luxId = id, date = date("%Y-%m-%d %H:%M"), patch = patch, tooltip = Try("keep tooltip", KeepTooltip) }
     local per = {}
     for _, e in ipairs(patch) do
         local group = e.root and (ROOT_LABEL[e.root] or e.root) or tostring(e.path[1] == "addons" and e.path[2] or e.path[1])
@@ -704,6 +766,10 @@ local function Keep(force)
     Print(("Kept %d settings of profile '%s' that differ from Luxthos UI%s."):format(#patch, name, #patch > 0 and (": " .. table.concat(parts, ", ")) or ""))
     if #offModules > 0 then
         Print("Not stored, because the module is switched off: " .. table.concat(offModules, ", ") .. ".")
+    end
+    local tip = DB.keep.tooltip
+    if tip then
+        Print(("Kept the tooltip position of Edit Mode layout '%s' (%s %.1f, %.1f)."):format(tip.layout, tostring(tip.anchor.point), tip.anchor.offsetX or 0, tip.anchor.offsetY or 0))
     end
     Print("After updating Luxthos UI, type /ft restore.")
 end
@@ -752,6 +818,10 @@ local function Restore()
     end
     if InCombatLockdown() then
         return Print("In combat; type /ft restore when it ends.")
+    end
+    local tipMessage = Try("restore tooltip", RestoreTooltip, k.tooltip)
+    if tipMessage then
+        Print(tipMessage)
     end
     local profile = EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[k.profile]
     if type(profile) ~= "table" then

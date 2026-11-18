@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `/ft keep` and `/ft restore` now also keep the tooltip position in your Edit Mode layout (Luxthos UI updates reset it to his default). `/ft restore` writes it back into the layout; close Edit Mode first. Tested in the Forever client.
 - `/ft keep` and `/ft restore`: store the EllesmereUI settings you changed compared with Luxthos UI's profile and put them back after a Luxthos UI update. The merge logic is unit-tested outside the game; not yet run in the game client.
 - `/ft keep` and `/ft restore` now also cover Cooldown Manager Bar Glows, which EllesmereUI stores per spec outside the profile. `/ft keep list barglows` shows them. Unit-tested outside the game; not yet run against a real Luxthos UI update.
 - `/ft keep` no longer stores settings that only differ because EllesmereUI filled in its own default and Luxthos UI's profile leaves that setting out. This removes most of the noise from the kept list.
